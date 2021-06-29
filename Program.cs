@@ -129,8 +129,6 @@ namespace DockerImageCheck
         static int ExecuteProcessIgnoreStdOut(string command, string args)
         {
             int ret = 0;
-            long ignoredWrites = 0;
-            long ignoredBytes = 0;
             Stopwatch sw = new Stopwatch();
 
             var info = new ProcessStartInfo()
@@ -139,8 +137,6 @@ namespace DockerImageCheck
                 Arguments = args,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.GetEncoding("ISO-8859-1"), // a.k.a. Latin1, single-byte binary encoding
                 UseShellExecute = false,
                 WorkingDirectory = Directory.GetCurrentDirectory(),
             };
@@ -150,35 +146,13 @@ namespace DockerImageCheck
                 process.EnableRaisingEvents = true;
                 process.StartInfo = info;
 
-                Action<object, DataReceivedEventArgs> actionWriteIgnore = (sender, e) =>
-                {
-                    // don't do anything
-                    ignoredWrites++;
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        ignoredBytes += e.Data.Length;
-                    }
-                };
-
-                Action<object, DataReceivedEventArgs> actionWriteStdErr = (sender, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.Error.WriteLine(e.Data);
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, e) => actionWriteStdErr(sender, e);
-                process.OutputDataReceived += (sender, e) => actionWriteIgnore(sender, e);
-
                 sw.Start();
                 process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
+                process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
                 process.WaitForExit();
                 sw.Stop();
 
-                Console.WriteLine($"command: '{command} {args}' : time: {sw.ElapsedMilliseconds}ms, actionWriteIgnore events: {ignoredWrites}, bytes ignored: {ignoredBytes}");
+                Console.WriteLine($"command: '{command} {args}' : time: {sw.ElapsedMilliseconds}ms");
 
                 ret = process.ExitCode;
             }
